@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Tunnel</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#000;overflow:hidden;width:100vw;height:100vh;}
+  canvas{display:block;width:100vw;height:100vh;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const cv=document.getElementById('c');
+const ct=cv.getContext('2d');
+let W,H,CX,CY;
+function resize(){W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;CX=W/2;CY=H/2;}
+resize();
+window.addEventListener('resize',resize);
+
+// ── HEART PATH ───────────────────────────────────────────
+function heartPath(s){
+  const w = s * 1.45;  // عرض بیشتر
+  const h = s * 1.25;  // طول بیشتر
+  ct.beginPath();
+  ct.moveTo(0, h*0.3);
+  ct.bezierCurveTo( w*1.05, -h*0.22,  w*1.0, -h*1.0,  0, -h*0.48);
+  ct.bezierCurveTo(-w*1.0,  -h*1.0,  -w*1.05, -h*0.22,  0,  h*0.3);
+  ct.closePath();
+}
+
+// ── STARS ────────────────────────────────────────────────
+const stars=Array.from({length:120},()=>({
+  x:Math.random()*3000, y:Math.random()*3000,
+  r:0.4+Math.random()*1.2,
+  ph:Math.random()*Math.PI*2,
+  spd:0.008+Math.random()*0.015
+}));
+function drawStars(){
+  stars.forEach(s=>{
+    s.ph+=s.spd;
+    const a=0.3+0.7*Math.abs(Math.sin(s.ph));
+    ct.save();
+    ct.globalAlpha=a;
+    ct.fillStyle='#fff';
+    ct.shadowBlur=4; ct.shadowColor='#cc88ff';
+    ct.beginPath();ct.arc(s.x,s.y,s.r,0,Math.PI*2);ct.fill();
+    ct.restore();
+  });
+}
+
+// ── RAYS ─────────────────────────────────────────────────
+let rayT=0;
+function drawRays(){
+  rayT+=0.003;
+  const n=20;
+  for(let i=0;i<n;i++){
+    const a=(i/n)*Math.PI*2;
+    const len=Math.max(W,H)*1.3;
+    const flicker=0.7+0.3*Math.sin(rayT*2.5+i);
+    const g=ct.createLinearGradient(CX,CY,CX+Math.cos(a)*len,CY+Math.sin(a)*len);
+    g.addColorStop(0,  `rgba(170,40,255,${0.30*flicker})`);
+    g.addColorStop(0.35,`rgba(170,40,255,${0.06*flicker})`);
+    g.addColorStop(1,  'rgba(0,0,0,0)');
+    ct.save();ct.strokeStyle=g;ct.lineWidth=26;
+    ct.beginPath();ct.moveTo(CX,CY);ct.lineTo(CX+Math.cos(a)*len,CY+Math.sin(a)*len);
+    ct.stroke();ct.restore();
+  }
+}
+
+// ── TUNNEL ───────────────────────────────────────────────
+const N=6, SPEED=0.004;
+let t=0;
+function pToSize(p){
+  const e=(Math.exp(p*3.0)-1)/(Math.exp(3.0)-1);
+  return e*Math.min(W,H)*1.6;
+}
+function pToStyle(p){
+  const hue  =255+p*60;
+  const light=28 +p*52;
+  const alpha=0.15+p*0.85;
+  const glow =18 +p*55;
+  const line =1  +p*4;
+  return{hue,light,alpha,glow,line};
+}
+function drawTunnel(){
+  const items=[];
+  for(let i=0;i<N;i++) items.push((t+i/N)%1);
+  items.sort((a,b)=>a-b);
+  items.forEach(p=>{
+    const s=pToSize(p); if(s<3)return;
+    const{hue,light,alpha,glow,line}=pToStyle(p);
+    ct.save(); ct.translate(CX,CY);
+
+    // layer 1 — wide soft glow
+    heartPath(s);
+    ct.shadowBlur=glow*2.8; ct.shadowColor=`hsl(${hue},100%,60%)`;
+    ct.strokeStyle=`hsla(${hue},100%,${light}%,${alpha*0.3})`;
+    ct.lineWidth=line*5+10; ct.stroke();
+
+    // layer 2 — medium glow
+    heartPath(s);
+    ct.shadowBlur=glow; ct.shadowColor=`hsl(${hue},100%,72%)`;
+    ct.strokeStyle=`hsla(${hue},100%,${light+14}%,${alpha*0.6})`;
+    ct.lineWidth=line*2+2; ct.stroke();
+
+    // layer 3 — crisp bright line
+    heartPath(s);
+    ct.shadowBlur=glow*0.25; ct.shadowColor=`hsl(${hue},100%,95%)`;
+    ct.strokeStyle=`hsla(${hue},100%,${light+28}%,${Math.min(alpha+0.1,1)})`;
+    ct.lineWidth=line*0.7; ct.stroke();
+
+    ct.restore();
+  });
+}
+
+// ── BLOOM ────────────────────────────────────────────────
+let bT=0;
+function drawBloom(){
+  bT+=0.004;
+  const pulse=0.88+Math.sin(bT)*0.12;
+  const s=Math.min(W,H)*0.016*pulse;
+  ct.save(); ct.translate(CX,CY);
+  const g=ct.createRadialGradient(0,0,0,0,0,s*13);
+  g.addColorStop(0,  'rgba(255,200,255,0.75)');
+  g.addColorStop(0.2,'rgba(210,70,255,0.38)');
+  g.addColorStop(0.5,'rgba(110,10,255,0.12)');
+  g.addColorStop(1,  'rgba(0,0,0,0)');
+  ct.fillStyle=g; ct.beginPath(); ct.arc(0,0,s*13,0,Math.PI*2); ct.fill();
+  ct.restore();
+}
+// ── FLOATING HEARTS ──────────────────────────────────────
+const fl=Array.from({length:16},()=>({
+  x:Math.random()*2000,y:Math.random()*2000,
+  s:2+Math.random()*6,vy:0.2+Math.random()*0.42,
+  vx:(Math.random()-0.5)*0.3,a:0.1+Math.random()*0.35,
+  ph:Math.random()*Math.PI*2
+}));
+function drawFloaters(){
+  fl.forEach(f=>{
+    f.y-=f.vy; f.x+=f.vx; f.ph+=0.018;
+    if(f.y<-20){f.y=H+10;f.x=Math.random()*W;}
+    if(f.x<-20||f.x>W+20)f.x=Math.random()*W;
+    ct.save(); ct.translate(f.x,f.y); ct.rotate(Math.sin(f.ph)*0.35);
+    ct.globalAlpha=f.a*(0.45+0.55*Math.sin(f.ph));
+    heartPath(f.s);
+    ct.fillStyle=`hsl(${275+Math.random()*55},90%,72%)`;
+    ct.shadowBlur=9; ct.shadowColor='#cc33ff'; ct.fill();
+    ct.restore();
+  });
+}
+
+// ── VIGNETTE ─────────────────────────────────────────────
+function drawVignette(){
+  const g=ct.createRadialGradient(CX,CY,Math.min(W,H)*0.1,CX,CY,Math.min(W,H)*0.74);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,'rgba(0,0,0,0.93)');
+  ct.fillStyle=g; ct.fillRect(0,0,W,H);
+}
+
+// ── LOOP ─────────────────────────────────────────────────
+let nT=0;
+function loop(){
+  t=(t+SPEED)%1;
+  nT+=0.002;
+
+  ct.clearRect(0,0,W,H);
+
+  // deep space bg
+  ct.fillStyle='#03000d';
+  ct.fillRect(0,0,W,H);
+
+  // subtle nebula — فقط یه لایه آروم
+  const nb=ct.createRadialGradient(CX,CY,0,CX,CY,Math.min(W,H)*0.65);
+  nb.addColorStop(0,  `hsla(280,80%,18%,${0.18+Math.sin(nT)*0.04})`);
+  nb.addColorStop(0.5,`hsla(260,70%,10%,0.10)`);
+  nb.addColorStop(1,  'rgba(0,0,0,0)');
+  ct.fillStyle=nb; ct.fillRect(0,0,W,H);
+
+  drawStars();
+  drawRays();
+  drawTunnel();
+  drawBloom();
+  drawFloaters();
+  drawVignette();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
